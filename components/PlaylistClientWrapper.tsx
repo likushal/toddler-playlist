@@ -4,6 +4,10 @@ import { useState, useEffect, useRef } from 'react';
 import { Song, ThemeConfig, CalendarEventKey } from '@/types';
 import PlaylistGrid from './PlaylistGrid';
 import SpotifyAutoPlayer from './SpotifyAutoPlayer';
+import YouTubePlayer from './YouTubePlayer';
+import AppleMusicPlayer from './AppleMusicPlayer';
+
+type Platform = 'spotify' | 'youtube' | 'apple';
 
 interface SavedPlaylist {
   id: string;
@@ -74,6 +78,9 @@ export default function PlaylistClientWrapper({
   // ── Selector panel state ──────────────────────────────────────────────────
   const [selectorOpen, setSelectorOpen] = useState(false);
 
+  // ── Platform ──────────────────────────────────────────────────────────────
+  const [platform, setPlatform] = useState<Platform>('spotify');
+
   // ── Playback state ────────────────────────────────────────────────────────
   const [playingIdx, setPlayingIdx] = useState<number | null>(null);
   const [isShuffled, setIsShuffled] = useState(false);
@@ -129,6 +136,15 @@ export default function PlaylistClientWrapper({
   useEffect(() => {
     localStorage.setItem('active-tab', activeTab);
   }, [activeTab]);
+
+  // Hydrate + persist platform
+  useEffect(() => {
+    const saved = localStorage.getItem('preferred-platform') as Platform | null;
+    if (saved && ['spotify', 'youtube', 'apple'].includes(saved)) setPlatform(saved);
+  }, []);
+  useEffect(() => {
+    localStorage.setItem('preferred-platform', platform);
+  }, [platform]);
 
   // Reset playback when tab changes
   useEffect(() => {
@@ -370,6 +386,30 @@ export default function PlaylistClientWrapper({
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
+      {/* ── Platform selector ── */}
+      <div className="mx-4 mb-3 flex items-center gap-2" dir="rtl">
+        <span className="text-xs text-gray-500 font-medium flex-shrink-0">מקור מוזיקה:</span>
+        <div className="flex rounded-full border border-gray-200 bg-gray-100 p-0.5 gap-0.5">
+          {([
+            { id: 'spotify', label: 'Spotify',      icon: '🟢' },
+            { id: 'youtube', label: 'YouTube',      icon: '▶️' },
+            { id: 'apple',   label: 'Apple Music',  icon: '🍎' },
+          ] as { id: Platform; label: string; icon: string }[]).map(p => (
+            <button
+              key={p.id}
+              onClick={() => setPlatform(p.id)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors whitespace-nowrap ${
+                platform === p.id
+                  ? 'bg-white shadow-sm text-gray-800'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {p.icon} {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* ── AI prompt bar ── */}
       <div className="mx-4 mb-4 flex gap-2 items-center" dir="rtl">
         <input
@@ -619,14 +659,29 @@ export default function PlaylistClientWrapper({
               className="w-9 h-9 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 hover:bg-gray-100 disabled:opacity-30 transition-colors flex-shrink-0"
             >→</button>
           </div>
-          {/^[A-Za-z0-9]{10,30}$/.test(currentSong.spotifyTrackId) ? (
-            <SpotifyAutoPlayer
-              key={playingIdx}
-              trackId={currentSong.spotifyTrackId}
+          {platform === 'spotify' ? (
+            /^[A-Za-z0-9]{10,30}$/.test(currentSong.spotifyTrackId) ? (
+              <SpotifyAutoPlayer
+                key={`spotify-${playingIdx}`}
+                trackId={currentSong.spotifyTrackId}
+                onEnded={handleSongEnded}
+              />
+            ) : (
+              <div className="px-4 pb-3 text-center text-sm text-red-400" dir="rtl">⚠️ לשיר זה אין קישור Spotify תקין</div>
+            )
+          ) : platform === 'youtube' ? (
+            <YouTubePlayer
+              key={`youtube-${playingIdx}`}
+              videoId={currentSong.youtubeMusicId}
+              songTitle={currentSong.titleTranslit}
               onEnded={handleSongEnded}
             />
           ) : (
-            <div className="px-4 pb-3 text-center text-sm text-red-400" dir="rtl">⚠️ לשיר זה אין קישור Spotify תקין</div>
+            <AppleMusicPlayer
+              key={`apple-${playingIdx}`}
+              songId={currentSong.appleMusicId}
+              onEnded={handleSongEnded}
+            />
           )}
         </div>
       )}

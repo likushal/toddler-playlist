@@ -22,6 +22,8 @@ export interface Song {
   titleHe: string;
   titleTranslit: string;
   spotifyTrackId: string;
+  youtubeMusicId?: string;
+  appleMusicId?: string;
   tags: CalendarEventKey[];
   emoji: string;
 }
