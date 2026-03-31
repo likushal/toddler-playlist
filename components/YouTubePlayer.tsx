@@ -17,6 +17,19 @@ interface Props {
   onEnded: () => void;
 }
 
+// Returns a list of candidate video IDs to try in order
+async function resolveVideoIds(videoId: string | undefined, songTitle: string): Promise<string[]> {
+  if (videoId) return [videoId];
+  try {
+    const res = await fetch(`/api/youtube-search?q=${encodeURIComponent(songTitle + ' שיר ילדים')}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.videoIds ?? (data.videoId ? [data.videoId] : []);
+  } catch {
+    return [];
+  }
+}
+
 export default function YouTubePlayer({ videoId, songTitle, onEnded }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef    = useRef<any>(null);
@@ -47,34 +60,34 @@ export default function YouTubePlayer({ videoId, songTitle, onEnded }: Props) {
   useEffect(() => {
     let gone = false;
 
-    function createPlayer() {
+    async function createPlayer() {
       if (gone || !containerRef.current) return;
+      const candidates = await resolveVideoIds(videoId, songTitle);
+      if (gone || !containerRef.current || candidates.length === 0) return;
+
       const target = document.createElement('div');
       containerRef.current.appendChild(target);
 
-      const opts: any = {
+      let candidateIdx = 0;
+
+      playerRef.current = new window.YT.Player(target, {
         height: '152',
         width:  '100%',
+        videoId: candidates[0],
         playerVars: { autoplay: 1, playsinline: 1, rel: 0, modestbranding: 1 },
         events: {
-          onReady: (e: any) => {
-            // Use specific videoId if available, otherwise search by title
-            if (videoId) {
-              e.target.loadVideoById(videoId);
-            } else {
-              e.target.loadVideoByQuery(`${songTitle} שיר ילדים`);
-            }
-          },
           onStateChange: (e: any) => {
             if (e.data === window.YT.PlayerState.ENDED) onEndedRef.current();
           },
+          onError: (e: any) => {
+            // 101 / 150 = embedding disabled; try next candidate
+            if ((e.data === 101 || e.data === 150) && candidateIdx < candidates.length - 1) {
+              candidateIdx++;
+              playerRef.current?.loadVideoById(candidates[candidateIdx]);
+            }
+          },
         },
-      };
-
-      // Seed with videoId or a blank placeholder so the player initialises
-      if (videoId) opts.videoId = videoId;
-
-      playerRef.current = new window.YT.Player(target, opts);
+      });
     }
 
     if (window._ytApiReady) {
@@ -93,11 +106,9 @@ export default function YouTubePlayer({ videoId, songTitle, onEnded }: Props) {
     if (!mounted.current) { mounted.current = true; return; }
     const p = playerRef.current;
     if (!p) return;
-    if (videoId) {
-      p.loadVideoById(videoId);
-    } else {
-      p.loadVideoByQuery(`${songTitle} שיר ילדים`);
-    }
+    resolveVideoIds(videoId, songTitle).then(ids => {
+      if (ids.length > 0) p.loadVideoById(ids[0]);
+    });
   }, [videoId, songTitle]);
 
   // ── Destroy on unmount ───────────────────────────────────────────────────

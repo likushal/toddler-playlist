@@ -7,16 +7,18 @@ export async function GET(req: NextRequest) {
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) return NextResponse.json({ error: 'YouTube not configured' }, { status: 503 });
 
-  const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(q)}&type=video&maxResults=1&key=${apiKey}`;
+  const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(q)}&type=video&maxResults=5&key=${apiKey}`;
   const res  = await fetch(url);
   const data = await res.json();
 
-  const item = data.items?.[0];
-  if (!item) return NextResponse.json({ error: 'not found' }, { status: 404 });
+  const items = data.items ?? [];
+  if (items.length === 0) return NextResponse.json({ error: 'not found' }, { status: 404 });
 
   return NextResponse.json({
-    videoId: item.id.videoId,
-    title:   item.snippet.title,
-    channel: item.snippet.channelTitle,
+    videoIds: items.map((item: any) => item.id.videoId),
+    // Keep backwards-compat single field
+    videoId: items[0].id.videoId,
+    title:   items[0].snippet.title,
+    channel: items[0].snippet.channelTitle,
   });
 }
