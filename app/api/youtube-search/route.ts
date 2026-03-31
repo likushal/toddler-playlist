@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) return NextResponse.json({ error: 'YouTube not configured' }, { status: 503 });
 
-  const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(q)}&type=video&maxResults=5&key=${apiKey}`;
+  const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(q)}&type=video&videoEmbeddable=true&maxResults=5&key=${apiKey}`;
   const res  = await fetch(url);
   const data = await res.json();
 
