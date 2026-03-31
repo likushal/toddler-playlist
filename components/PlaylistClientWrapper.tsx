@@ -79,7 +79,7 @@ export default function PlaylistClientWrapper({
   const [selectorOpen, setSelectorOpen] = useState(false);
 
   // ── Platform ──────────────────────────────────────────────────────────────
-  const [platform, setPlatform] = useState<Platform>('spotify');
+  const [platform, setPlatform] = useState<Platform>('youtube');
 
   // ── Playback state ────────────────────────────────────────────────────────
   const [playingIdx, setPlayingIdx] = useState<number | null>(null);

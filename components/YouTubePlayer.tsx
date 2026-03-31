@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 
 declare global {
   interface Window {
@@ -12,8 +12,8 @@ declare global {
 }
 
 interface Props {
-  videoId?: string;
-  songTitle: string;
+  videoId?: string;   // pre-populated ID (preferred)
+  songTitle: string;  // used as search query if no videoId
   onEnded: () => void;
 }
 
@@ -21,25 +21,9 @@ export default function YouTubePlayer({ videoId, songTitle, onEnded }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef    = useRef<any>(null);
   const onEndedRef   = useRef(onEnded);
-  const [resolvedId, setResolvedId] = useState<string | undefined>(videoId);
-  const [searching,  setSearching]  = useState(false);
-
   onEndedRef.current = onEnded;
 
-  // ── Resolve video ID: use prop or search YouTube ────────────────────────
-  useEffect(() => {
-    if (videoId) { setResolvedId(videoId); return; }
-    let gone = false;
-    setSearching(true);
-    fetch(`/api/youtube-search?q=${encodeURIComponent(songTitle + ' שיר ילדים')}`)
-      .then(r => r.json())
-      .then(d => { if (!gone && d.videoId) setResolvedId(d.videoId); })
-      .catch(() => {})
-      .finally(() => { if (!gone) setSearching(false); });
-    return () => { gone = true; };
-  }, [videoId, songTitle]);
-
-  // ── Load YouTube IFrame API once ────────────────────────────────────────
+  // ── Load YouTube IFrame API once, globally ──────────────────────────────
   useEffect(() => {
     if (window._ytApiReady) return;
     window._ytApiCallbacks = window._ytApiCallbacks ?? [];
@@ -59,35 +43,38 @@ export default function YouTubePlayer({ videoId, songTitle, onEnded }: Props) {
     }
   }, []);
 
-  // ── Create or update player when resolvedId changes ─────────────────────
+  // ── Create player on mount ───────────────────────────────────────────────
   useEffect(() => {
-    if (!resolvedId) return;
-
-    // Player already exists — just load new video
-    if (playerRef.current) {
-      playerRef.current.loadVideoById(resolvedId);
-      return;
-    }
-
     let gone = false;
-    const vid = resolvedId;
 
     function createPlayer() {
       if (gone || !containerRef.current) return;
       const target = document.createElement('div');
       containerRef.current.appendChild(target);
-      playerRef.current = new window.YT.Player(target, {
-        videoId: vid,
+
+      const opts: any = {
         height: '152',
         width:  '100%',
         playerVars: { autoplay: 1, playsinline: 1, rel: 0, modestbranding: 1 },
         events: {
-          onReady:       (e: any) => e.target.playVideo(),
+          onReady: (e: any) => {
+            // Use specific videoId if available, otherwise search by title
+            if (videoId) {
+              e.target.loadVideoById(videoId);
+            } else {
+              e.target.loadVideoByQuery(`${songTitle} שיר ילדים`);
+            }
+          },
           onStateChange: (e: any) => {
             if (e.data === window.YT.PlayerState.ENDED) onEndedRef.current();
           },
         },
-      });
+      };
+
+      // Seed with videoId or a blank placeholder so the player initialises
+      if (videoId) opts.videoId = videoId;
+
+      playerRef.current = new window.YT.Player(target, opts);
     }
 
     if (window._ytApiReady) {
@@ -98,9 +85,22 @@ export default function YouTubePlayer({ videoId, songTitle, onEnded }: Props) {
     }
 
     return () => { gone = true; };
-  }, [resolvedId]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Destroy player on unmount ───────────────────────────────────────────
+  // ── When song changes, load new video without remounting ────────────────
+  const mounted = useRef(false);
+  useEffect(() => {
+    if (!mounted.current) { mounted.current = true; return; }
+    const p = playerRef.current;
+    if (!p) return;
+    if (videoId) {
+      p.loadVideoById(videoId);
+    } else {
+      p.loadVideoByQuery(`${songTitle} שיר ילדים`);
+    }
+  }, [videoId, songTitle]);
+
+  // ── Destroy on unmount ───────────────────────────────────────────────────
   useEffect(() => {
     return () => {
       if (playerRef.current) {
@@ -109,18 +109,6 @@ export default function YouTubePlayer({ videoId, songTitle, onEnded }: Props) {
       }
     };
   }, []);
-
-  if (searching) return (
-    <div className="w-full flex items-center justify-center bg-gray-50" style={{ minHeight: 152 }}>
-      <span className="text-gray-400 text-sm">מחפש ב-YouTube...</span>
-    </div>
-  );
-
-  if (!resolvedId) return (
-    <div className="w-full flex items-center justify-center bg-gray-50" style={{ minHeight: 152 }}>
-      <span className="text-gray-400 text-sm" dir="rtl">⚠️ השיר לא נמצא ב-YouTube</span>
-    </div>
-  );
 
   return <div ref={containerRef} className="w-full" style={{ minHeight: 152 }} />;
 }
