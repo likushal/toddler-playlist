@@ -79,9 +79,9 @@ export default function YouTubePlayer({ videoId, songTitle, onEnded }: Props) {
           onStateChange: (e: any) => {
             if (e.data === window.YT.PlayerState.ENDED) onEndedRef.current();
           },
-          onError: (e: any) => {
-            // 101 / 150 = embedding disabled; try next candidate
-            if ((e.data === 101 || e.data === 150) && candidateIdx < candidates.length - 1) {
+          onError: () => {
+            // On any error, try the next candidate
+            if (candidateIdx < candidates.length - 1) {
               candidateIdx++;
               playerRef.current?.loadVideoById(candidates[candidateIdx]);
             }
